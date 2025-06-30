@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CointegrationTest } from "@/components/CointegrationTest";
 import { BacktestEngine } from "@/components/BacktestEngine";
 import { DataFetcher } from "@/components/DataFetcher";
+import { MLEnhancement } from "@/components/MLEnhancement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -84,17 +85,14 @@ const Index = () => {
               <CardHeader>
                 <CardTitle className="text-white">Phase 4: ML Enhancement</CardTitle>
                 <CardDescription className="text-purple-200">
-                  Machine learning features to improve trade timing (Coming Soon)
+                  Machine learning features to improve trade timing and signal filtering
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-12">
-                  <h3 className="text-2xl font-semibold text-white mb-4">ML Features Coming Soon</h3>
-                  <p className="text-purple-200">
-                    This phase will include feature engineering, model training, 
-                    and ML-enhanced signal filtering.
-                  </p>
-                </div>
+                <MLEnhancement 
+                  stockData={stockData}
+                  cointegrationResults={cointegrationResults}
+                />
               </CardContent>
             </Card>
           </TabsContent>
