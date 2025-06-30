@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +21,8 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
   const generateRealisticData = (ticker1: string, ticker2: string) => {
     const dates = [];
     const data = [];
+
     const startDate = new Date('2020-01-01');
-    
-    // Generate 3 years of daily data (excluding weekends)
     let currentDate = new Date(startDate);
     while (dates.length < 780) { // ~3 years of trading days
       if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
@@ -33,48 +31,37 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Initialize realistic starting prices based on actual tickers
     const priceMap = {
       'KO': 50, 'PEP': 135, 'AAPL': 300, 'MSFT': 200, 
       'JPM': 120, 'BAC': 30, 'XOM': 60, 'CVX': 100
     };
-    
     let price1 = priceMap[ticker1] || 50;
     let price2 = priceMap[ticker2] || 45;
-    
-    // Create cointegrated relationship with realistic volatility
-    const correlation = 0.75 + Math.random() * 0.2; // 0.75-0.95 correlation
-    const volatility1 = 0.015 + Math.random() * 0.01; // 1.5-2.5% daily vol
+
+    const correlation = 0.75 + Math.random() * 0.2;
+    const volatility1 = 0.015 + Math.random() * 0.01;
     const volatility2 = 0.015 + Math.random() * 0.01;
-    
+
     dates.forEach((date, i) => {
-      // Market regime changes
       const marketRegime = Math.sin(i / 100) * 0.5 + Math.random() * 0.3;
-      
-      // Common market shock
       const marketShock = (Math.random() - 0.5) * 0.02 * (1 + marketRegime);
-      
-      // Individual stock shocks
       const shock1 = (Math.random() - 0.5) * volatility1;
       const shock2 = (Math.random() - 0.5) * volatility2;
-      
-      // Apply correlated movements with mean reversion
+
       const return1 = marketShock * correlation + shock1 * (1 - correlation);
       const return2 = marketShock * correlation + shock2 * (1 - correlation);
-      
-      // Add slight mean reversion between the pair
+
       const spreadDeviation = (price1 / price2) - (priceMap[ticker1] / priceMap[ticker2]);
       const meanReversionForce = -spreadDeviation * 0.001;
-      
+
       price1 *= (1 + return1 + meanReversionForce);
       price2 *= (1 + return2 - meanReversionForce);
-      
-      // Add some realistic price movements (trending periods)
+
       if (i > 200 && i < 400) {
-        price1 *= 1.0003; // Slight uptrend
+        price1 *= 1.0003;
         price2 *= 1.0002;
       }
-      
+
       data.push({
         date,
         [ticker1]: Math.round(price1 * 100) / 100,
@@ -90,7 +77,7 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
     try {
       const data1 = await fetchYahooPrices(ticker1);
       const data2 = await fetchYahooPrices(ticker2);
-  
+
       // Merge by date
       const merged = [];
       const map2 = Object.fromEntries(data2.map(d => [d.date, d.price]));
@@ -107,7 +94,11 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
       onDataFetched({ ticker1, ticker2, data: merged });
       toast.success(`Successfully fetched ${merged.length} days of data for ${ticker1} and ${ticker2}`);
     } catch (error: any) {
+      // Show clearer error if non-JSON or other network issue
       toast.error("Failed to fetch stock data: " + (error.message || error));
+      // Optionally, provide fallback/test data for local dev
+      // setStockData(generateRealisticData(ticker1, ticker2));
+      // onDataFetched({ ticker1, ticker2, data: generateRealisticData(ticker1, ticker2) });
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +144,7 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
             </h3>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stockData.slice(-252)}> {/* Last year of data */}
+                <LineChart data={stockData.slice(-252)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                   <XAxis 
                     dataKey="date" 
