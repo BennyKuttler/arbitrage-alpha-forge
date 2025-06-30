@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
+import { fetchYahooPrices } from "@/logic/fetchYahooPrices";
 
 interface DataFetcherProps {
   onDataFetched: (data: any) => void;
@@ -87,15 +88,26 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const data = generateRealisticData(ticker1, ticker2);
-      setStockData(data);
-      onDataFetched({ ticker1, ticker2, data });
-      toast.success(`Successfully fetched ${data.length} days of data for ${ticker1} and ${ticker2}`);
-    } catch (error) {
-      toast.error("Failed to fetch stock data");
+      const data1 = await fetchYahooPrices(ticker1);
+      const data2 = await fetchYahooPrices(ticker2);
+  
+      // Merge by date
+      const merged = [];
+      const map2 = Object.fromEntries(data2.map(d => [d.date, d.price]));
+      for (const d1 of data1) {
+        if (map2[d1.date] !== undefined && d1.price !== null && map2[d1.date] !== null) {
+          merged.push({
+            date: d1.date,
+            [ticker1]: d1.price,
+            [ticker2]: map2[d1.date],
+          });
+        }
+      }
+      setStockData(merged);
+      onDataFetched({ ticker1, ticker2, data: merged });
+      toast.success(`Successfully fetched ${merged.length} days of data for ${ticker1} and ${ticker2}`);
+    } catch (error: any) {
+      toast.error("Failed to fetch stock data: " + (error.message || error));
     } finally {
       setIsLoading(false);
     }
