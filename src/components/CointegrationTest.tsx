@@ -207,7 +207,7 @@ export const CointegrationTest = ({ stockData, onResultsGenerated }: Cointegrati
                 </ResponsiveContainer>
               </div>
               <div className="mt-2 text-xs text-purple-300 text-center">
-                Entry signals: |Z-Score| > 1.0, Exit signals: |Z-Score| < 0.1
+                Entry signals: |Z-Score| {'>'}  1.0, Exit signals: |Z-Score| {'<'} 0.1
               </div>
             </CardContent>
           </Card>
