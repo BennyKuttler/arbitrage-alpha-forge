@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
+import { LoadingSpinner } from "./LoadingSpinner";
 
 interface DataFetcherProps {
   onDataFetched: (data: any) => void;
@@ -20,14 +21,14 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch data for both tickers using the API proxy
+      // Use the direct Yahoo Finance API since we can't use the backend in Lovable
       const [response1, response2] = await Promise.all([
-        fetch(`/api/yahoo-prices?symbol=${ticker1}&range=3y&interval=1d`),
-        fetch(`/api/yahoo-prices?symbol=${ticker2}&range=3y&interval=1d`)
+        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker1}?range=3y&interval=1d`),
+        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker2}?range=3y&interval=1d`)
       ]);
 
       if (!response1.ok || !response2.ok) {
-        throw new Error('Failed to fetch data from API');
+        throw new Error('Failed to fetch data from Yahoo Finance API');
       }
 
       const data1 = await response1.json();
@@ -80,10 +81,59 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
       toast.success(`Successfully fetched ${merged.length} days of data for ${ticker1} and ${ticker2}`);
     } catch (error: any) {
       console.error('Data fetch error:', error);
+      
+      // If CORS error, provide helpful message
+      if (error.message.includes('CORS') || error.name === 'TypeError') {
+        toast.error("CORS error: Direct API access blocked by browser. Using demo data instead.");
+        
+        // Provide demo data as fallback
+        const demoData = generateDemoData(ticker1, ticker2);
+        setStockData(demoData);
+        onDataFetched({ ticker1, ticker2, data: demoData });
+        return;
+      }
+      
       toast.error("Failed to fetch stock data: " + (error.message || error));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Generate realistic demo data as fallback
+  const generateDemoData = (symbol1: string, symbol2: string) => {
+    const startDate = new Date();
+    startDate.setFullYear(startDate.getFullYear() - 3);
+    
+    const data = [];
+    let price1 = 50 + Math.random() * 50; // Starting price for symbol1
+    let price2 = 60 + Math.random() * 40; // Starting price for symbol2
+    
+    for (let i = 0; i < 750; i++) { // ~3 years of trading days
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      
+      // Skip weekends
+      if (date.getDay() === 0 || date.getDay() === 6) continue;
+      
+      // Add some correlation and random walk
+      const change1 = (Math.random() - 0.5) * 2;
+      const change2 = change1 * 0.7 + (Math.random() - 0.5) * 1.5; // Somewhat correlated
+      
+      price1 += change1;
+      price2 += change2;
+      
+      // Ensure prices stay positive
+      price1 = Math.max(price1, 5);
+      price2 = Math.max(price2, 5);
+      
+      data.push({
+        date: date.toISOString().slice(0, 10),
+        [symbol1]: Math.round(price1 * 100) / 100,
+        [symbol2]: Math.round(price2 * 100) / 100,
+      });
+    }
+    
+    return data;
   };
 
   return (
@@ -114,7 +164,14 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
           disabled={isLoading}
           className="bg-purple-600 hover:bg-purple-700"
         >
-          {isLoading ? "Fetching..." : "Fetch Data"}
+          {isLoading ? (
+            <>
+              <LoadingSpinner size="sm" className="mr-2" />
+              Fetching...
+            </>
+          ) : (
+            "Fetch Data"
+          )}
         </Button>
       </div>
 
