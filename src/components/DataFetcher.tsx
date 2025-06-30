@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { toast } from "sonner";
-import { fetchYahooPrices } from "@/logic/fetchYahooPrices";
 
 interface DataFetcherProps {
   onDataFetched: (data: any) => void;
@@ -17,71 +17,51 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [stockData, setStockData] = useState(null);
 
-  // Generate realistic stock data based on actual market patterns
-  const generateRealisticData = (ticker1: string, ticker2: string) => {
-    const dates = [];
-    const data = [];
-
-    const startDate = new Date('2020-01-01');
-    let currentDate = new Date(startDate);
-    while (dates.length < 780) { // ~3 years of trading days
-      if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-        dates.push(currentDate.toISOString().split('T')[0]);
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    const priceMap = {
-      'KO': 50, 'PEP': 135, 'AAPL': 300, 'MSFT': 200, 
-      'JPM': 120, 'BAC': 30, 'XOM': 60, 'CVX': 100
-    };
-    let price1 = priceMap[ticker1] || 50;
-    let price2 = priceMap[ticker2] || 45;
-
-    const correlation = 0.75 + Math.random() * 0.2;
-    const volatility1 = 0.015 + Math.random() * 0.01;
-    const volatility2 = 0.015 + Math.random() * 0.01;
-
-    dates.forEach((date, i) => {
-      const marketRegime = Math.sin(i / 100) * 0.5 + Math.random() * 0.3;
-      const marketShock = (Math.random() - 0.5) * 0.02 * (1 + marketRegime);
-      const shock1 = (Math.random() - 0.5) * volatility1;
-      const shock2 = (Math.random() - 0.5) * volatility2;
-
-      const return1 = marketShock * correlation + shock1 * (1 - correlation);
-      const return2 = marketShock * correlation + shock2 * (1 - correlation);
-
-      const spreadDeviation = (price1 / price2) - (priceMap[ticker1] / priceMap[ticker2]);
-      const meanReversionForce = -spreadDeviation * 0.001;
-
-      price1 *= (1 + return1 + meanReversionForce);
-      price2 *= (1 + return2 - meanReversionForce);
-
-      if (i > 200 && i < 400) {
-        price1 *= 1.0003;
-        price2 *= 1.0002;
-      }
-
-      data.push({
-        date,
-        [ticker1]: Math.round(price1 * 100) / 100,
-        [ticker2]: Math.round(price2 * 100) / 100,
-      });
-    });
-
-    return data;
-  };
-
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const data1 = await fetchYahooPrices(ticker1);
-      const data2 = await fetchYahooPrices(ticker2);
+      // Fetch data for both tickers using the API proxy
+      const [response1, response2] = await Promise.all([
+        fetch(`/api/yahoo-prices?symbol=${ticker1}&range=3y&interval=1d`),
+        fetch(`/api/yahoo-prices?symbol=${ticker2}&range=3y&interval=1d`)
+      ]);
+
+      if (!response1.ok || !response2.ok) {
+        throw new Error('Failed to fetch data from API');
+      }
+
+      const data1 = await response1.json();
+      const data2 = await response2.json();
+
+      // Parse Yahoo Finance response structure
+      const result1 = data1.chart?.result?.[0];
+      const result2 = data2.chart?.result?.[0];
+
+      if (!result1 || !result2) {
+        throw new Error('Invalid ticker or data unavailable');
+      }
+
+      const timestamps1 = result1.timestamp;
+      const prices1 = result1.indicators.quote[0].close;
+      const timestamps2 = result2.timestamp;
+      const prices2 = result2.indicators.quote[0].close;
+
+      // Convert to date-price format
+      const data1Formatted = timestamps1.map((t: number, i: number) => ({
+        date: new Date(t * 1000).toISOString().slice(0, 10),
+        price: prices1[i],
+      }));
+
+      const data2Formatted = timestamps2.map((t: number, i: number) => ({
+        date: new Date(t * 1000).toISOString().slice(0, 10),
+        price: prices2[i],
+      }));
 
       // Merge by date
       const merged = [];
-      const map2 = Object.fromEntries(data2.map(d => [d.date, d.price]));
-      for (const d1 of data1) {
+      const map2 = Object.fromEntries(data2Formatted.map(d => [d.date, d.price]));
+      
+      for (const d1 of data1Formatted) {
         if (map2[d1.date] !== undefined && d1.price !== null && map2[d1.date] !== null) {
           merged.push({
             date: d1.date,
@@ -90,15 +70,17 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
           });
         }
       }
+
+      if (merged.length === 0) {
+        throw new Error('No overlapping data found for the selected tickers');
+      }
+
       setStockData(merged);
       onDataFetched({ ticker1, ticker2, data: merged });
       toast.success(`Successfully fetched ${merged.length} days of data for ${ticker1} and ${ticker2}`);
     } catch (error: any) {
-      // Show clearer error if non-JSON or other network issue
+      console.error('Data fetch error:', error);
       toast.error("Failed to fetch stock data: " + (error.message || error));
-      // Optionally, provide fallback/test data for local dev
-      // setStockData(generateRealisticData(ticker1, ticker2));
-      // onDataFetched({ ticker1, ticker2, data: generateRealisticData(ticker1, ticker2) });
     } finally {
       setIsLoading(false);
     }
@@ -114,7 +96,7 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
             value={ticker1}
             onChange={(e) => setTicker1(e.target.value.toUpperCase())}
             placeholder="e.g., KO"
-            className="bg-white/10 border-purple-300/30 text-white"
+            className="bg-white/10 border-purple-300/30 text-white placeholder:text-purple-200"
           />
         </div>
         <div>
@@ -124,7 +106,7 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
             value={ticker2}
             onChange={(e) => setTicker2(e.target.value.toUpperCase())}
             placeholder="e.g., PEP"
-            className="bg-white/10 border-purple-300/30 text-white"
+            className="bg-white/10 border-purple-300/30 text-white placeholder:text-purple-200"
           />
         </div>
         <Button 
@@ -182,13 +164,13 @@ export const DataFetcher = ({ onDataFetched }: DataFetcherProps) => {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-purple-200">
               <div>
-                <strong>{ticker1}:</strong> ${stockData[stockData.length - 1][ticker1]} 
+                <strong>{ticker1}:</strong> ${stockData[stockData.length - 1][ticker1].toFixed(2)} 
                 <span className="ml-2">
                   ({((stockData[stockData.length - 1][ticker1] / stockData[0][ticker1] - 1) * 100).toFixed(1)}% total return)
                 </span>
               </div>
               <div>
-                <strong>{ticker2}:</strong> ${stockData[stockData.length - 1][ticker2]}
+                <strong>{ticker2}:</strong> ${stockData[stockData.length - 1][ticker2].toFixed(2)}
                 <span className="ml-2">
                   ({((stockData[stockData.length - 1][ticker2] / stockData[0][ticker2] - 1) * 100).toFixed(1)}% total return)
                 </span>
